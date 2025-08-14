@@ -1,0 +1,36 @@
+{
+  "_meta": {
+    "name": "Evolutions",
+    "version": "1.0.0",
+    "generated_at": "2025-08-14T16:23:51.102781Z",
+    "tabs": [
+      "Speculation",
+      "Sport",
+      "Mental_Physique",
+      "Objectifs",
+      "Evolution"
+    ]
+  },
+  "Speculation": [
+    {
+      "Date": "2025-07-25",
+      "Type": "Achat",
+      "Objet": "John Locke (traduit par Pierre Coste) – Essai Philosophique concernant l’Entendement Humain – 1779",
+      "Categorie": "Livres",
+      "Achat_Prix": 42.0,
+      "Achat_Frais": 16.78,
+      "Achat_Total": 58.78,
+      "Revente_Prix": "",
+      "Revente_Frais": "",
+      "Marge": "",
+      "Source": "Enchères",
+      "Lieu": "Coincy, France",
+      "Commentaire": "Commande #43476306",
+      "Photo_URL": "0CF32ECF-2C85-4546-8423-ABD40C7EEAF3.jpeg"
+    }
+  ],
+  "Sport": [],
+  "Mental_Physique": [],
+  "Objectifs": [],
+  "Evolution": []
+}
