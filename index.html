@@ -1,0 +1,209 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Evolutions - Suivi Perso Automatisé</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.0.2/tesseract.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .tab { padding: 10px; cursor: pointer; background: #f0f0f0; }
+        .tab:hover { background: #e0e0e0; }
+        .tab.active { background: #ddd; font-weight: bold; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        .input-section { margin-bottom: 20px; }
+        .input-section input { margin: 5px; padding: 5px; width: 300px; }
+        .input-section button { padding: 5px 10px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Evolutions - Suivi Perso</h1>
+
+    <div class="input-section">
+        <h2>Ajouter un lien TAG Heuer (Golf)</h2>
+        <input type="text" id="golfLink" placeholder="Collez le lien TAG Heuer (même avec texte)">
+        <button onclick="addGolfData()">Ajouter</button>
+    </div>
+
+    <div class="input-section">
+        <h2>Ajouter une facture (Spéculations)</h2>
+        <input type="file" id="invoiceImage" accept="image/*">
+        <button onclick="processInvoice()">Traiter</button>
+    </div>
+
+    <div class="tabs">
+        <div class="tab active" onclick="showTab('golf')">Golf</div>
+        <div class="tab" onclick="showTab('speculations')">Spéculations</div>
+    </div>
+
+    <div id="golf" class="tab-content active">
+        <h2>Performances Golf</h2>
+        <table id="golfTable">
+            <thead>
+                <tr><th>Date</th><th>Course</th><th>Total Score</th><th>Total Putts</th><th>Stableford</th><th>Score Differential</th></tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <div id="speculations" class="tab-content">
+        <h2>Spéculations</h2>
+        <table id="speculationsTable">
+            <thead>
+                <tr><th>Date d'achat</th><th>Description achat</th><th>Prix total</th><th>Spéculation en temps réel</th><th>Autres détails</th></tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <script>
+        // Simuler le fichier JSON avec localStorage
+        let data = JSON.parse(localStorage.getItem('evolutionsData')) || {
+            golf: [],
+            speculations: [] // Changé de finances à speculations
+        };
+
+        // Afficher les onglets
+        function showTab(tabId) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.querySelector(`[onclick="showTab('${tabId}')"]`).classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+            updateTables();
+        }
+
+        // Mettre à jour les tableaux avec gestion des erreurs
+        function updateTables() {
+            const golfTable = document.querySelector('#golfTable tbody');
+            const speculationsTable = document.querySelector('#speculationsTable tbody');
+            golfTable.innerHTML = '';
+            speculationsTable.innerHTML = '';
+            data.golf.forEach(item => {
+                golfTable.innerHTML += `<tr><td>${item.date ?? 'N/A'}</td><td>${item.course ?? 'N/A'}</td><td>${item.totals?.score ?? 'N/A'}</td><td>${item.totals?.putts ?? 'N/A'}</td><td>${item.totals?.stableford ?? 'N/A'}</td><td>${item.totals?.differential ?? 'N/A'}</td></tr>`;
+            });
+            data.speculations.forEach(item => {
+                speculationsTable.innerHTML += `<tr><td>${item.dateAchat ?? 'N/A'}</td><td>${item.descriptionAchat ?? 'N/A'}</td><td>${item.prixTotal ?? 'N/A'}</td><td>${item.speculationReel ?? 'N/A'}</td><td>${item.autresDetails ?? 'N/A'}</td></tr>`;
+            });
+        }
+
+        // Ajouter un lien TAG Heuer avec parsing texte (comme au début, mais adapté au texte brut)
+        async function addGolfData() {
+            let input = document.getElementById('golfLink').value.trim();
+            if (!input) return alert('Entrez un lien valide.');
+            const urlMatch = input.match(/https:\/\/www\.tagheuergolf\.com\/rounds\/[a-zA-Z0-9\-]+/);
+            if (!urlMatch) return alert('Lien TAG Heuer non valide.');
+            const link = urlMatch[0];
+            const proxy = 'https://api.allorigins.win/raw?url=';
+            try {
+                const response = await fetch(proxy + encodeURIComponent(link));
+                if (!response.ok) throw new Error('Erreur de chargement : ' + response.status);
+                const html = await response.text();
+                let lines = html.split('\n').map(l => l.trim()).filter(l => l);
+                if (lines.length < 50) throw new Error('Contenu de la page non suffisant.');
+                // Extraire course et date
+                const course = lines[0].split(' / ')[0] || 'Unknown Course';
+                const dateLine = lines.find(l => /\w+day \w+ \d+, \d{4} \d{2}:\d{2}/.test(l)) || new Date().toISOString().split('T')[0];
+                let date = dateLine ? dateLine.split(' ')[2].replace(',', '') + '-' + ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].indexOf(dateLine.split(' ')[1]) + 1 + '-' + dateLine.split(' ')[3] : new Date().toISOString().split('T')[0];
+                // Trouver indices des sections
+                const scoreIdx = lines.indexOf('Score');
+                const puttsIdx = lines.indexOf('Putts');
+                const stablefordIdx = lines.indexOf('Stableford / Net');
+                const diffIdx = lines.indexOf('Score Differential');
+                if (scoreIdx === -1 || puttsIdx === -1 || stablefordIdx === -1 || diffIdx === -1) throw new Error('Format de la page non reconnu.');
+                // Extraire totals (dernière value de chaque section)
+                const scoreLines = lines.slice(scoreIdx + 1, puttsIdx).filter(l => !isNaN(parseInt(l)));
+                const puttsLines = lines.slice(puttsIdx + 1, stablefordIdx).filter(l => !isNaN(parseInt(l)));
+                const stablefordLines = lines.slice(stablefordIdx + 1, diffIdx).filter(l => !isNaN(parseInt(l)));
+                const totals = {
+                    score: parseInt(scoreLines[scoreLines.length - 1]) || 0,
+                    putts: parseInt(puttsLines[puttsLines.length - 1]) || 0,
+                    stableford: parseInt(stablefordLines[stablefordLines.length - 1]) || 0,
+                    differential: lines[diffIdx + 1] || 'N/A'
+                };
+                data.golf.push({date, course, totals});
+                localStorage.setItem('evolutionsData', JSON.stringify(data));
+                updateTables();
+                document.getElementById('golfLink').value = '';
+                alert('Données golf ajoutées !');
+            } catch (error) {
+                alert('Erreur : ' + error.message);
+            }
+        }
+
+        // Traiter une facture avec Tesseract.js (plus d'extractions)
+        async function processInvoice() {
+            const fileInput = document.getElementById('invoiceImage');
+            if (!fileInput.files[0]) return alert('Sélectionnez une image.');
+            const file = fileInput.files[0];
+            try {
+                const { data: { text } } = await Tesseract.recognize(file, 'eng+fra');
+                const dateAchatMatch = text.match(/Date d'achat:\s*(\d{4}-\d{2}-\d{2})/i) || text.match(/Date:\s*(\d{4}-\d{2}-\d{2})/i) || [null, new Date().toISOString().split('T')[0]];
+                const descriptionAchatMatch = text.match(/Description:\s*(.*)/i) || text.match(/Article:\s*(.*)/i) || [null, text.replace(/\n/g, ' ').slice(0, 200).trim()];
+                const prixTotalMatch = text.match(/Prix total:\s*([\d.,]+)\s*(€|$)?/i) || text.match(/Total:\s*([\d.,]+)\s*(€|$)?/i) || [null, '0.00'];
+                const autresDetails = text.replace(/\n/g, ' ').trim() || 'N/A';
+                const speculationReel = 'N/A'; // Real-time : demande à Grok pour mise à jour (ex. recherche valeur marché actuelle)
+                const newData = {
+                    dateAchat: dateAchatMatch[1],
+                    descriptionAchat: descriptionAchatMatch[1],
+                    prixTotal: prixTotalMatch[1],
+                    speculationReel: speculationReel,
+                    autresDetails: autresDetails
+                };
+                data.speculations.push(newData);
+                localStorage.setItem('evolutionsData', JSON.stringify(data));
+                updateTables();
+                fileInput.value = '';
+                alert('Facture traitée !');
+            } catch (error) {
+                alert('Erreur OCR : ' + error.message);
+            }
+        }
+
+        // Initialiser l'affichage
+        updateTables();
+    </script>
+</body>
+</html>
