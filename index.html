@@ -1,116 +1,174 @@
-<!doctype html>
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Evolutions</title>
-  <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:20px}
-    h1{margin:0 0 8px 0}
-    .sub{color:#666;margin:0 0 14px 0;font-size:13px}
-    .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0}
-    .tabs{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap}
-    .tabs button{padding:8px 12px;border:1px solid #ddd;background:#f8f8f8;cursor:pointer;border-radius:8px}
-    .tabs button.active{background:#fff;border-color:#999}
-    input[type="search"]{padding:8px;width:260px}
-    table{width:100%;border-collapse:collapse;margin-top:8px}
-    th,td{border:1px solid #eee;padding:6px 8px;font-size:14px;vertical-align:top}
-    th{background:#fafafa;text-align:left;position:sticky;top:0}
-    .empty{color:#777;padding:16px}
-    .tip{color:#555;font-size:12px;margin-top:8px}
-    .btn{padding:8px 12px;border:1px solid #ddd;background:#f8f8f8;border-radius:8px;cursor:pointer}
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Evolutions - Suivi Perso Automatisé</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.0.2/tesseract.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .tab { padding: 10px; cursor: pointer; background: #f0f0f0; }
+        .tab.active { background: #ddd; font-weight: bold; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        .input-section { margin-bottom: 20px; }
+        .input-section input { margin: 5px; padding: 5px; }
+        .input-section button { padding: 5px 10px; }
+    </style>
 </head>
 <body>
-<h1>Evolutions</h1>
-<p class="sub">Tableau lecture seule. Charge ton fichier JSON de données pour afficher les onglets.</p>
+    <h1>Evolutions - Suivi Perso</h1>
 
-<div class="tabs" id="tabs"></div>
+    <div class="input-section">
+        <h2>Ajouter un lien TAG Heuer (Golf)</h2>
+        <input type="text" id="golfLink" placeholder="Collez le lien TAG Heuer">
+        <button onclick="addGolfData()">Ajouter</button>
+    </div>
 
-<div class="bar">
-  <input id="q" type="search" placeholder="Filtrer (texte)">
-  <button class="btn" id="load">Charger JSON…</button>
-  <button class="btn" id="save">Exporter JSON</button>
-  <span id="stamp" class="tip"></span>
-</div>
+    <div class="input-section">
+        <h2>Ajouter une facture (Spéculation)</h2>
+        <input type="file" id="invoiceImage" accept="image/*">
+        <button onclick="processInvoice()">Traiter</button>
+    </div>
 
-<div id="table"></div>
+    <div class="tabs">
+        <div class="tab active" onclick="showTab('golf')">Golf</div>
+        <div class="tab" onclick="showTab('finances')">Finances</div>
+    </div>
 
-<script>
-const DATA = { Speculation: [], Sport: [], Mental_Physique: [], Objectifs: [], Evolution: [] };
+    <div id="golf" class="tab-content active">
+        <h2>Performances Golf</h2>
+        <table id="golfTable">
+            <thead>
+                <tr><th>Date</th><th>Score</th><th>Parcours</th></tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
 
-const TABS = ["Speculation","Sport","Mental_Physique","Objectifs","Evolution"];
-let current = "Sport";
+    <div id="finances" class="tab-content">
+        <h2>Finances (Spéculation)</h2>
+        <table id="financesTable">
+            <thead>
+                <tr><th>Date</th><th>Montant</th><th>Description</th></tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
 
-const tabs = document.getElementById('tabs');
-const tableDiv = document.getElementById('table');
-const q = document.getElementById('q');
-const stamp = document.getElementById('stamp');
+    <script>
+        // Simuler le fichier JSON avec localStorage
+        let data = JSON.parse(localStorage.getItem('evolutionsData')) || {
+            golf: [],
+            finances: []
+        };
 
-TABS.forEach(t=>{
-  const b = document.createElement('button');
-  b.textContent = t; b.className = 'btn';
-  b.onclick = ()=>{document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('active')); b.classList.add('active'); current=t; render();};
-  if(t===current) b.classList.add('active');
-  tabs.appendChild(b);
-});
+        // Afficher les onglets
+        function showTab(tabId) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.querySelector(`[onclick="showTab('${tabId}')"]`).classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+            updateTables();
+        }
 
-q.addEventListener('input', render);
+        // Mettre à jour les tableaux
+        function updateTables() {
+            const golfTable = document.querySelector('#golfTable tbody');
+            const financesTable = document.querySelector('#financesTable tbody');
+            golfTable.innerHTML = '';
+            financesTable.innerHTML = '';
+            data.golf.forEach(item => {
+                golfTable.innerHTML += `<tr><td>${item.date}</td><td>${item.score}</td><td>${item.course}</td></tr>`;
+            });
+            data.finances.forEach(item => {
+                financesTable.innerHTML += `<tr><td>${item.date}</td><td>${item.amount}</td><td>${item.description}</td></tr>`;
+            });
+        }
 
-function ensureComputed(){
-  (DATA.Speculation || []).forEach(r => {
-    const prix = parseFloat(r.Achat_Prix || 0);
-    const frais = parseFloat(r.Achat_Frais || 0);
-    const total = (isNaN(prix)?0:prix) + (isNaN(frais)?0:frais);
-    if (total && (r.Achat_Total === undefined || r.Achat_Total === "")) {
-      r.Achat_Total = Math.round(total * 100) / 100;
-    }
-  });
-}
+        // Ajouter un lien TAG Heuer (exemple simplifié)
+        async function addGolfData() {
+            const link = document.getElementById('golfLink').value;
+            // Simulation : on suppose que le lien contient des données JSON ou HTML
+            // À adapter selon le vrai format des liens TAG Heuer
+            const newData = {
+                date: new Date().toISOString().split('T')[0],
+                score: '72', // Remplacer par un vrai parsing du lien
+                course: 'Parcours Exemple' // Remplacer par un vrai parsing
+            };
+            data.golf.push(newData);
+            localStorage.setItem('evolutionsData', JSON.stringify(data));
+            updateTables();
+            document.getElementById('golfLink').value = '';
+            alert('Données golf ajoutées !');
+        }
 
-function render(){
-  ensureComputed();
-  const rows = DATA[current] || [];
-  const term = q.value?.trim().toLowerCase() || "";
-  const filtered = term ? rows.filter(r => JSON.stringify(r).toLowerCase().includes(term)) : rows;
-  if(filtered.length===0){ tableDiv.innerHTML = `<div class="empty">Aucune donnée.</div>`; stamp.textContent=""; return; }
-  const cols = Object.keys(filtered[0]);
-  let html = "<table><thead><tr>" + cols.map(c=>`<th>${c}</th>`).join("") + "</tr></thead><tbody>";
-  html += filtered.map(r=>"<tr>"+cols.map(c=>`<td>${r[c] ?? ""}</td>`).join("")+"</tr>").join("");
-  html += "</tbody></table>";
-  tableDiv.innerHTML = html;
-  stamp.textContent = "Dernière mise à jour : " + new Date().toLocaleString();
-}
-render();
+        // Traiter une facture avec Tesseract.js
+        async function processInvoice() {
+            const fileInput = document.getElementById('invoiceImage');
+            if (!fileInput.files[0]) {
+                alert('Veuillez sélectionner une image.');
+                return;
+            }
+            const file = fileInput.files[0];
+            const { data: { text } } = await Tesseract.recognize(file, 'eng');
+            // Simulation : extraire montant et date (à affiner selon le format des factures)
+            const newData = {
+                date: new Date().toISOString().split('T')[0],
+                amount: text.match(/\d+\.\d{2}/)?.[0] || '0.00',
+                description: text.slice(0, 50) || 'Facture'
+            };
+            data.finances.push(newData);
+            localStorage.setItem('evolutionsData', JSON.stringify(data));
+            updateTables();
+            fileInput.value = '';
+            alert('Facture traitée !');
+        }
 
-// Load JSON (structure: {Speculation:[...], Sport:[...], ...})
-document.getElementById('load').addEventListener('click', ()=>{
-  const inp = document.createElement('input');
-  inp.type = 'file'; inp.accept = '.json,application/json';
-  inp.onchange = () => {
-    const f = inp.files[0];
-    const reader = new FileReader();
-    reader.onload = () => {
-      try{
-        const parsed = JSON.parse(reader.result);
-        const TABS = ["Speculation","Sport","Mental_Physique","Objectifs","Evolution"];
-        for(const k of TABS){ if(parsed[k]) DATA[k] = parsed[k]; }
-        render();
-        alert("Données chargées.");
-      }catch(e){ alert("JSON invalide : " + e.message); }
-    };
-    reader.readAsText(f, 'utf-8');
-  };
-  inp.click();
-});
-
-document.getElementById('save').addEventListener('click', ()=>{
-  const blob = new Blob([JSON.stringify(DATA, null, 2)], {type: 'application/json'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'ledger_data.json';
-  a.click();
-});
-</script>
+        // Initialiser l'affichage
+        updateTables();
+    </script>
 </body>
 </html>
